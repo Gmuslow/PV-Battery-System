@@ -61,6 +61,9 @@
 % 
 % end
 % 
+%====================================================================================
+%=================================================================================
+% THIS IS THE NEW SCRIPT 
 function [u0, e0] = pv_battery_ems(PV_forecast, SoC0, loadP, R, T)
 
 % import yalmip.*   % <- correctly commented out

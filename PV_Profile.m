@@ -3,7 +3,7 @@ function PV_f = PV_Profile(T,t0)
 % Get current Simulink time
 % t0 = getCurrentTime(); 
 
-% Simulation timestep (seconds)
+% Simulation timestep
 dt = 60; % 1 minute steps, or match your solver step size
 
 % Preallocate forecast vector
