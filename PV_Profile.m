@@ -4,7 +4,7 @@ function PV_f = PV_Profile(T,t0)
 % t0 = getCurrentTime(); 
 
 % Simulation timestep
-dt = 60; % 1 minute steps, or match your solver step size
+dt = 60; 
 
 % Preallocate forecast vector
 PV_f = zeros(T,1);

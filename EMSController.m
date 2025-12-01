@@ -10,7 +10,7 @@ classdef EMSController < matlab.System
             [u_bat, e] = pv_battery_ems(PV_forecast, SoC, loadP, R, T);
         end
 
-        %--- Output characteristics for Simulink (size / type / etc.)-
+       
 
         % Number of outputs
         function n = getNumOutputsImpl(~)
