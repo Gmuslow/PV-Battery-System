@@ -81,9 +81,10 @@ Constraints = (SoC(1) == SoC0);
 % Parameters
 SoC_min = 0.2; SoC_max = 0.9;
 u_min   = -2000; u_max = 2000;
+P_nom =100;%IN WATTS
 eta_c   = 0.98; eta_d = 0.98;
-C_nom   = 3600*100;   % 100Ah
-dt      = 60;         % 1 min timestep
+E_nom   = 3600* P_nom;   
+dt      = 60;         % 1 step is equal to 60  seconds
 
 Objective = 0;
 
@@ -93,11 +94,11 @@ for k = 1:T
     P_sup = PV_forecast(k) + u(k);% PV + battery
 
     % Cost: reward for serving loads - mismatch penalty
-    Objective = Objective - (R' * e(:,k)) + 1.0*abs(P_req - P_sup);
+    Objective = Objective - (R' * e(:,k)) + 0.95*abs(P_req - P_sup);
 
     % Constraints
     Constraints = [Constraints;
-        SoC(k+1) == SoC(k) + dt/C_nom * (eta_c*max(u(k),0) + 1/eta_d*min(u(k),0));
+        SoC(k+1) == SoC(k) + dt/E_nom * (eta_c*max(u(k),0) + 1/eta_d*min(u(k),0));
         SoC_min <= SoC(k+1) <= SoC_max;
         u_min   <= u(k)     <= u_max;
     ];
