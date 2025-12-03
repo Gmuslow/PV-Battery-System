@@ -1,4 +1,69 @@
-function [u0, e0, reward0] = pv_battery_ems(PV_forecast, SoC0, loadP, R, T)
+% function [u0, e0, reward0] = pv_battery_ems(PV_forecast, SoC0, loadP, R, T)
+% 
+% nLoads = length(loadP);
+% 
+% % Decision variables over horizon
+% u   = sdpvar(T,1);          % battery power over horizon
+% e   = binvar(nLoads, T);    % load enables (0/1) over horizon
+% SoC = sdpvar(T+1,1);        % state of charge trajectory
+% 
+% % Initial SOC
+% Constraints = (SoC(1) == SoC0);
+% 
+% % Parameters
+% SoC_min = 0.2; SoC_max = 0.9;
+% u_min   = -2000; u_max = 2000;
+% P_nom =100;%IN WATTS
+% eta_c   = 0.98; eta_d = 0.98;
+% E_nom   = 3600* P_nom;   
+% dt      = 60;         % 1 step is equal to 60  seconds
+% 
+% Objective = 0;
+% 
+% for k = 1:T
+%     % Load power requirement
+%     P_req = loadP' * e(:,k);      % total load you turn on
+%     P_sup = PV_forecast(k) + u(k);% PV + battery
+% 
+%     % Cost: reward for serving loads - mismatch penalty
+%     Objective = Objective - (R' * e(:,k)) + 0.95*abs(P_req - P_sup);
+% 
+%     % Constraints
+%     Constraints = [Constraints;
+%         SoC(k+1) == SoC(k) + dt/E_nom * (eta_c*max(u(k),0) + 1/eta_d*min(u(k),0));
+%         SoC_min <= SoC(k+1) <= SoC_max;
+%         u_min   <= u(k)     <= u_max;
+%     ];
+% end
+% 
+% % Solver options
+% ops = sdpsettings('solver','bnb','verbose',0,'bmibnb.maxiter', 40,'bmibnb.maxtime', 2);  
+% %  % 0 if you want it quiet
+% % ops = sdpsettings('solver','gurobi','verbose',0);
+% % Solve
+% sol = optimize(Constraints, Objective, ops);
+% 
+% if sol.problem ~= 0
+%     % Optimization failed - fall back to safe defaults
+%     warning('EMS optimization failed: %s. Using fallback u=0, e=zeros.', sol.info);
+%     u0 = 0;
+%     e0 = zeros(nLoads,1);
+%     reward0 = 0;
+% else
+%     % Optimization successful
+%     u0 = value(u(1));
+%     e0 = value(e(:,1));
+%     % ---- Compute reward for timestep k = 1 ----
+%     P_req_1 = loadP' * e0;       
+%     P_sup_1 = PV_forecast(1) + u0;
+%     reward0 = R' * e0 - 0.001 * abs(P_req_1 - P_sup_1);
+% end
+% 
+% end
+
+
+%===============================================================================
+function [u0, e0, reward0] = pv_battery_ems(PV_forecast, SoC0, loadP, R, T) 
 
 nLoads = length(loadP);
 
@@ -11,52 +76,77 @@ SoC = sdpvar(T+1,1);        % state of charge trajectory
 Constraints = (SoC(1) == SoC0);
 
 % Parameters
-SoC_min = 0.2; SoC_max = 0.9;
-u_min   = -2000; u_max = 2000;
-P_nom =100;%IN WATTS
-eta_c   = 0.98; eta_d = 0.98;
-E_nom   = 3600* P_nom;   
-dt      = 60;         % 1 step is equal to 60  seconds
+SoC_min = 0.2; 
+SoC_max = 0.9;
+
+u_min   = -2000; 
+u_max   =  2000;
+
+P_nom   = 100;              % battery energy rating in [Wh]
+eta_c   = 0.98; 
+eta_d   = 0.98;
+
+E_nom   = 3600 * P_nom;     % [J] = Wh * 3600
+dt      = 60;               % 1 step = 60 s
+
+% ---- Cost weights ----
+w_mis     = 0.95;      % mismatch penalty weight
+alpha_SoC = 50;        % terminal SoC penalty weight (moderate)
+SoC_ref   = 0.5;       % desired SoC at end of horizon
 
 Objective = 0;
 
 for k = 1:T
     % Load power requirement
-    P_req = loadP' * e(:,k);      % total load you turn on
-    P_sup = PV_forecast(k) + u(k);% PV + battery
+    P_req = loadP' * e(:,k);       % total load you turn on
+    P_sup = PV_forecast(k) + u(k); % PV + battery
 
-    % Cost: reward for serving loads - mismatch penalty
-    Objective = Objective - (R' * e(:,k)) + 0.95*abs(P_req - P_sup);
+    % ---- Stage cost: reward for loads - mismatch penalty ----
+    Objective = Objective ...
+        - (R' * e(:,k)) ...             % reward for serving loads
+        + w_mis * abs(P_req - P_sup);   % mismatch penalty
 
-    % Constraints
+    % ---- SoC dynamics (energy-based model) ----
+    % u > 0: charging, u < 0: discharging
+    charge_term    = eta_c   * max(u(k), 0);    % only when u>0
+    discharge_term = (1/eta_d) * min(u(k), 0);  % u<0 is negative
+
     Constraints = [Constraints;
-        SoC(k+1) == SoC(k) + dt/E_nom * (eta_c*max(u(k),0) + 1/eta_d*min(u(k),0));
+        SoC(k+1) == SoC(k) + dt/E_nom * (charge_term + discharge_term);
         SoC_min <= SoC(k+1) <= SoC_max;
         u_min   <= u(k)     <= u_max;
     ];
 end
 
+% ---- Terminal SoC penalty: keep SoC(T+1) near SoC_ref ----
+Objective = Objective + alpha_SoC * (SoC(T+1) - SoC_ref)^2;
+
 % Solver options
-ops = sdpsettings('solver','bnb','verbose',0,'bmibnb.maxiter', 40,'bmibnb.maxtime', 2);  
-%  % 0 if you want it quiet
-% ops = sdpsettings('solver','gurobi','verbose',0);
+ops = sdpsettings('solver','bnb','verbose',0, ...
+                  'bmibnb.maxiter', 40, ...
+                  'bmibnb.maxtime', 2);  
+
 % Solve
 sol = optimize(Constraints, Objective, ops);
 
 if sol.problem ~= 0
     % Optimization failed - fall back to safe defaults
     warning('EMS optimization failed: %s. Using fallback u=0, e=zeros.', sol.info);
-    u0 = 0;
-    e0 = zeros(nLoads,1);
+    u0      = 0;
+    e0      = zeros(nLoads,1);
     reward0 = 0;
 else
     % Optimization successful
     u0 = value(u(1));
     e0 = value(e(:,1));
+
     % ---- Compute reward for timestep k = 1 ----
     P_req_1 = loadP' * e0;       
     P_sup_1 = PV_forecast(1) + u0;
-    reward0 = R' * e0 - 0.001 * abs(P_req_1 - P_sup_1);
+
+    % Instantaneous reward (same structure as stage cost but positive sign)
+    reward0 = (R' * e0) ...
+              - w_mis * abs(P_req_1 - P_sup_1);
 end
 
 end

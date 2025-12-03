@@ -11,7 +11,7 @@ PV_f = zeros(T,1);
 
 % PV sinusoidal model parameters
 Pmax = 1200;       % peak PV power
-day_length = 86400; % seconds per day (24 hours)
+day_length = 3600*2; % seconds per day (24 hours)
 
 % Generate forecast for next T steps
 for k = 1:T
