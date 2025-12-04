@@ -79,19 +79,19 @@ Constraints = (SoC(1) == SoC0);
 SoC_min = 0.2; 
 SoC_max = 0.9;
 
-u_min   = -2000; 
+u_min   = -2000; 10000
 u_max   =  2000;
 
-P_nom   = 50000;              % battery energy rating in [Wh]
+P_nom   = 100;              % battery energy rating in [Wh]
 eta_c   = 0.98; 
 eta_d   = 0.98;
 
 E_nom   = 3600 * P_nom;     % [J] = Wh * 3600
-dt      = 3600;               % 1 step = 60 s
+dt      = 60;               % 1 step = 60 s
 
 % ---- Cost weights ----
 w_mis     = 0.95;      % mismatch penalty weight
-alpha_SoC = 1;        % terminal SoC penalty weight (moderate)
+alpha_SoC = 50;        % terminal SoC penalty weight (moderate)
 SoC_ref   = 0.5;       % desired SoC at end of horizon
 
 Objective = 0;
@@ -115,7 +115,6 @@ for k = 1:T
         SoC(k+1) == SoC(k) + dt/E_nom * (charge_term + discharge_term);
         SoC_min <= SoC(k+1) <= SoC_max;
         u_min   <= u(k)     <= u_max;
-        u(k) <= PV_forecast(k);
     ];
 end
 
@@ -144,7 +143,6 @@ else
     % ---- Compute reward for timestep k = 1 ----
     P_req_1 = loadP' * e0;       
     P_sup_1 = PV_forecast(1) + u0;
-    
 
     % Instantaneous reward (same structure as stage cost but positive sign)
     reward0 = (R' * e0) ...
