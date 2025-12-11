@@ -25,7 +25,7 @@ eta_d = 0.98;
 E_nom = 3600 * P_nom;
 dt    = 3600;
 
-alpha_SoC = 1;
+alpha_SoC = 0.1;
 SoC_ref   = 0.5;
 
 Objective = 0;
